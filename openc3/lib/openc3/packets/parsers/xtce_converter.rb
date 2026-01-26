@@ -307,14 +307,13 @@ module OpenC3
               end # If Arguments List is greater than 0
               xml['xtce'].CommandContainer(:name => "#{packet_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}_Commands") do
                 process_entry_list(xml, packet, :COMMAND, unique_tlm_params)
-                  #xml['xtce'].BaseContainer(:containerRef => "#{target_name}_#{packet_name}_CommandContainer")
                 if packet.id_items && packet.id_items.length > 0
-                  packet.id_items.each do |item|
                     xml['xtce'].BaseContainer(:containerRef => "#{packet_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}_Commands") do
                       xml['xtce'].RestrictionCriteria do
                         xml['xtce'].ComparisonList do
-                          item_prefix = unique_tlm_params.include?(item.name) ? "CMD_" : ""
-                          xml['xtce'].Comparison(:parameterRef => item_prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR),:value => item.id_value)
+                          packet.id_items.each do |item|
+                            item_prefix = unique_tlm_params.include?(item.name) ? "CMD_" : ""
+                            xml['xtce'].Comparison(:parameterRef => item_prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR),:value => item.id_value)
                         end
                       end # Restriction Criteria
                     end # Base Container
