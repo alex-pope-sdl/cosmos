@@ -1288,8 +1288,12 @@ module OpenC3
               "  APPEND_ITEM RECEIVED_TIMESECONDS 64 UINT \"Regular item\"\n"
         tlm2 = "TELEMETRY TGT1 TLM_PKT_2 BIG_ENDIAN \"Telemetry\"\n"\
               "  ID_ITEM ID 0 8 UINT 1 \"ID\"\n"
+        tlm3 = "TELEMETRY TGT1 TLM_PKT_3 BIG_ENDIAN \"Telemetry\"\n"\
+              "  ID_ITEM ID 0 8 UINT 1 \"ID\"\n" \
+              "  APPEND_ITEM RECEIVED_COUNT 64 UINT \"Regular item\"\n"
         tf.puts tlm
         tf.puts tlm2
+        tf.puts tlm3
         tf.close
         @pc.process_file(tf.path, "TGT1")
         spec_install = File.join("..", "..", "install")
@@ -1302,6 +1306,9 @@ module OpenC3
         expect(xtce_doc.to_s).to include("name=\"RECEIVED_COUNT\"")
         expect(xtce_doc.to_s).to include("name=\"RECEIVED_TIMEFORMATTED\"")
         expect(xtce_doc.to_s).to include("name=\"RECEIVED_TIMESECONDS\"")
+        File.open("output.txt", "w") do |file|
+          file.write(xtce_doc.to_s)
+        end
         tf.unlink
         FileUtils.rm_rf File.join(spec_install, "TGT1")
       end

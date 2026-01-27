@@ -369,7 +369,13 @@ module OpenC3
           unique[item_name] = unique_items[0]
           next
         elsif COSMOS_NATIVE_DERIVED_ITEMS.include?(item_name)
-          unique[item_name] = unique_items[1]
+          unique[item_name] = unique_items[0]
+          unique_items.each do |item|
+            if !item.nil? && (item.description.nil? || !item.description.start_with?("OpenC3"))
+              unique[item_name] = item
+              break
+            end
+          end
         else
           unique[item_name] = unique_items[0]
         end
