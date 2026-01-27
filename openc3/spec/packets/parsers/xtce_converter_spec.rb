@@ -100,14 +100,14 @@ module OpenC3
 
     def sample_simple_cmd_packet_with_alias(tf)
       tf.puts "    <xtce:ParameterTypeSet>"
-      tf.puts "      <xtce:IntegerParameterType name=\"CMD_0__ATTRIBUTES_ID_Type\" initialValue=\"0\" shortDescription=\"CMD_ID Description\" signed=\"false\">"
+      tf.puts "      <xtce:IntegerParameterType name=\"CMD_CMD_0__ATTRIBUTES_ID_Type\" initialValue=\"0\" shortDescription=\"CMD_ID Description\" signed=\"false\">"
       tf.puts "        <xtce:UnitSet/>"
       tf.puts "        <xtce:IntegerDataEncoding sizeInBits=\"16\" encoding=\"unsigned\" byteOrder=\"leastSignificantByteFirst\"/>"
       tf.puts "        <xtce:ValidRange minInclusive=\"0\" maxInclusive=\"0\"/>"
       tf.puts "      </xtce:IntegerParameterType>"
       tf.puts "    </xtce:ParameterTypeSet>"
       tf.puts "    <xtce:ParameterSet>"
-      tf.puts "      <xtce:Parameter name=\"CMD_0__ATTRIBUTES_ID\" parameterTypeRef=\"CMD_0__ATTRIBUTES_ID_Type\">"
+      tf.puts "      <xtce:Parameter name=\"CMD_CMD_0__ATTRIBUTES_ID\" parameterTypeRef=\"CMD_CMD_0__ATTRIBUTES_ID_Type\">"
       tf.puts "        <xtce:AliasSet>"
       tf.puts "          <xtce:Alias nameSpace=\"COSMOS\" alias=\"CMD[0].ATTRIBUTES/ID\"/>"
       tf.puts "        </xtce:AliasSet>"
@@ -134,13 +134,13 @@ module OpenC3
       tf.puts "        </xtce:ArgumentList>"
       tf.puts "        <xtce:CommandContainer name=\"CMDPKT_Commands\">"
       tf.puts "          <xtce:EntryList>"
-      tf.puts "            <xtce:ParameterRefEntry parameterRef=\"CMD_0__ATTRIBUTES_ID\"/>"
+      tf.puts "            <xtce:ParameterRefEntry parameterRef=\"CMD_CMD_0__ATTRIBUTES_ID\"/>"
       tf.puts "            <xtce:ArgumentRefEntry argumentRef=\"CMD_0__ATTRIBUTES_BOOL\"/>"
       tf.puts "          </xtce:EntryList>"
       tf.puts "          <xtce:BaseContainer containerRef=\"CMDPKT_Commands\">"
       tf.puts "            <xtce:RestrictionCriteria>"
       tf.puts "              <xtce:ComparisonList>"
-      tf.puts "                <xtce:Comparison parameterRef=\"CMD_0__ATTRIBUTES_ID\" value=\"0\"/>"
+      tf.puts "                <xtce:Comparison parameterRef=\"CMD_CMD_0__ATTRIBUTES_ID\" value=\"0\"/>"
       tf.puts "              </xtce:ComparisonList>"
       tf.puts "            </xtce:RestrictionCriteria>"
       tf.puts "          </xtce:BaseContainer>"
@@ -1221,8 +1221,8 @@ module OpenC3
       it "handles multiple id parameters" do
         tf = Tempfile.new('unittest')
         cmd = "COMMAND TGT1 CMD_PKT LITTLE_ENDIAN \"Command\"\n"\
-              "  ID_PARAMETER CMD_ID1 0 8 UINT 1 1 1 \"First ID\"\n"\
-              "  ID_PARAMETER CMD_ID2 8 8 UINT 2 2 2 \"Second ID\"\n"\
+              "  ID_PARAMETER ID1 0 8 UINT 1 1 1 \"First ID\"\n"\
+              "  ID_PARAMETER ID2 8 8 UINT 2 2 2 \"Second ID\"\n"\
               "  PARAMETER CMD_PARAM 16 16 UINT 0 65535 0 \"Parameter\"\n"
         tf.puts cmd
         tf.close
@@ -1254,6 +1254,54 @@ module OpenC3
         xtce_doc = Nokogiri::XML(File.open(xml_path))
         expect(xtce_doc.to_s).to include("ArrayParameterType")
         expect(xtce_doc.to_s).to include("ArrayParameterRefEntry")
+        tf.unlink
+        FileUtils.rm_rf File.join(spec_install, "TGT1")
+      end
+
+      it "Converts tlm items that share a name with injected Cosmos derived items" do
+        filename = File.join(File.dirname(__FILE__), "../../conversion2.rb")
+        File.open(filename, 'w') do |file|
+          file.puts "require 'openc3/conversions/conversion'"
+          file.puts "class Conversion2 < OpenC3::Conversion"
+          file.puts "  def initialize(parameter_name)"
+          file.puts "    super()"
+          file.puts "    @converted_type = :STRING"
+          file.puts "    @parameter_name = parameter_name"
+          file.puts "    @converted_bit_size = 0"
+          file.puts "    @params = nil"
+          file.puts "  end"
+          file.puts "  def call(value, packet, buffer)"
+          file.puts "    value * 2"
+          file.puts "  end"
+          file.puts "end"
+        end
+        load 'conversion2.rb'
+        tf = Tempfile.new('unittest')
+        tlm = "TELEMETRY TGT1 TLM_PKT BIG_ENDIAN \"Telemetry\"\n"\
+              "  ID_ITEM ID 0 8 UINT 0 \"ID\"\n"\
+              "  ITEM PACKET_TIME 0 0 DERIVED \"Regular item\"\n"\
+              "    READ_CONVERSION conversion2.rb ID \n"\
+              "  APPEND_ITEM RECEIVED_COUNT 64 UINT \"Regular item\"\n"\
+              "  APPEND_ITEM PACKET_TIMESECONDS 64 UINT \"Regular item\"\n"\
+              "  APPEND_ITEM PACKET_TIMEFORMATTED 64 UINT \"Regular item\"\n"\
+              "  APPEND_ITEM RECEIVED_TIMEFORMATTED 64 UINT \"Regular item\"\n"\
+              "  APPEND_ITEM RECEIVED_TIMESECONDS 64 UINT \"Regular item\"\n"
+        tlm2 = "TELEMETRY TGT1 TLM_PKT_2 BIG_ENDIAN \"Telemetry\"\n"\
+              "  ID_ITEM ID 0 8 UINT 1 \"ID\"\n"
+        tf.puts tlm
+        tf.puts tlm2
+        tf.close
+        @pc.process_file(tf.path, "TGT1")
+        spec_install = File.join("..", "..", "install")
+        @pc.to_xtce(spec_install, "PACKET_TIME")
+        xml_path = File.join(spec_install, "TGT1", "cmd_tlm", "tgt1.xtce")
+        expect(File.exist?(xml_path)).to be true
+        xtce_doc = Nokogiri::XML(File.open(xml_path))
+        expect(xtce_doc.to_s).to include("name=\"PACKET_TIMESECONDS\"")
+        expect(xtce_doc.to_s).to include("name=\"PACKET_TIMEFORMATTED\"")
+        expect(xtce_doc.to_s).to include("name=\"RECEIVED_COUNT\"")
+        expect(xtce_doc.to_s).to include("name=\"RECEIVED_TIMEFORMATTED\"")
+        expect(xtce_doc.to_s).to include("name=\"RECEIVED_TIMESECONDS\"")
         tf.unlink
         FileUtils.rm_rf File.join(spec_install, "TGT1")
       end

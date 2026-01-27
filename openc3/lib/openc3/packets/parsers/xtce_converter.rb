@@ -205,6 +205,7 @@ module OpenC3
 
       unique_items = telemetry[target_name] ? get_unique(telemetry[target_name]) : {}
 
+
       xml['xtce'].TelemetryMetaData do
         xml['xtce'].ParameterTypeSet do
           unique_items.each do |item_name, item|
@@ -265,19 +266,15 @@ module OpenC3
         if unique_id_items.size > 0
           xml['xtce'].ParameterTypeSet do
             unique_id_items.each do |item_name, item|
-              prefix = unique_tlm_params.include?(item_name) ? "CMD_" : ""
-              to_xtce_type(item, 'Parameter', xml, prefix: prefix)
+              to_xtce_type(item, 'Parameter', xml, prefix: "CMD_")
             end
           end
           xml['xtce'].ParameterSet do
             unique_id_items.each do |item_name, item|
-              prefix = unique_tlm_params.include?(item_name) ? "CMD_" : ""
-              to_xtce_item(item, 'Parameter', xml, prefix: prefix)
+              to_xtce_item(item, 'Parameter', xml, prefix: "CMD_")
             end
           end
         end
-        #unique_command_args_without_ids = get_unique_without_ids(commands[target_name])
-        #if unique_command_args_without_ids.size > 0
         xml['xtce'].ArgumentTypeSet do
           commands[target_name].each do |packet_name, packet|
             packet.items.each do |arg_name, arg|
@@ -312,7 +309,7 @@ module OpenC3
                       xml['xtce'].RestrictionCriteria do
                         xml['xtce'].ComparisonList do
                           packet.id_items.each do |item|
-                            item_prefix = unique_tlm_params.include?(item.name) ? "CMD_" : ""
+                            item_prefix = "CMD_"
                             xml['xtce'].Comparison(:parameterRef => item_prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR),:value => item.id_value)
                         end
                       end # Restriction Criteria
@@ -371,8 +368,11 @@ module OpenC3
         if unique_items.length <= 1
           unique[item_name] = unique_items[0]
           next
+        elsif COSMOS_NATIVE_DERIVED_ITEMS.include?(item_name)
+          unique[item_name] = unique_items[1]
+        else
+          unique[item_name] = unique_items[0]
         end
-        unique[item_name] = unique_items[0]
       end
       unique
     end
@@ -391,8 +391,11 @@ module OpenC3
         if unique_items.length <= 1
           unique[item_name] = unique_items[0]
           next
+        elsif COSMOS_NATIVE_DERIVED_ITEMS.include?(item_name)
+          unique[item_name] = unique_items[1]
+        else
+          unique[item_name] = unique_items[0]
         end
-        unique[item_name] = unique_items[0]
       end
       unique
     end
@@ -420,8 +423,11 @@ module OpenC3
         if unique_items.length <= 1
           unique[item_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] = unique_items[0]
           next
+        elsif COSMOS_NATIVE_DERIVED_ITEMS.include?(item_name)
+          unique[item_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] = unique_items[1]
+        else
+          unique[item_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] = unique_items[0]
         end
-        unique[item_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] = unique_items[0]
       end
       unique
     end
@@ -441,7 +447,7 @@ module OpenC3
         packet.sorted_items.each do |item|
           next if item.data_type == :DERIVED
           temp_type = item.id_value ? "Parameter" : type
-          prefix = (cmd_vs_tlm == :COMMAND && unique_tlm_params.include?(item.name)) ? "CMD_" : ""
+          prefix = (cmd_vs_tlm == :COMMAND && temp_type == "Parameter") ? "CMD_" : ""
           if item.array_size
             # Requiring parameterRef for argument arrays appears to be a defect in the schema
             reference_symbol = temp_type == "Argument" ? :parameterRef : "#{temp_type.downcase}Ref".to_sym
