@@ -25,8 +25,9 @@ require 'openc3/packets/parsers/xtce_parser'
 require 'fileutils'
 
 DYNAMIC_STRING_LEN = 2048
-INVALID_CHARS = '[]./'
-REPLACEMENT_CHAR = '_'
+MATCH_INVALID_REGEX = /[\[\]\.\/]/
+INVALID_CHARS = "[]./"
+REPLACEMENT_CHAR = '__'
 ALIAS_NAMESPACE = 'COSMOS'
 
 COMBINED_NAME = "COMBINED"
@@ -178,8 +179,8 @@ module OpenC3
       algorithm_xml = Nokogiri::XML::Builder.new do |alg_xml|
         alg_xml.AlgorithmSet do
           derived.each do |packet_name, item|
-            alg_xml.CustomAlgorithm("name" => "#{packet_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}_" \
-                                    "#{item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}_#{item.read_conversion.class.name}") do
+            alg_xml.CustomAlgorithm("name" => "#{packet_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)}_" \
+                                    "#{item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)}_#{item.read_conversion.class.name}") do
               alg_xml.ExternalAlgorithmSet do
                 alg_xml.ExternalAlgorithm("implementationName" => "TODO", "algorithmLocation" => "TODO")
               end
@@ -187,7 +188,7 @@ module OpenC3
                 alg_xml.InputParameterInstanceRef( :parameterRef => "TODO", :instance => "0", :useCalibratedValue => "TODO")
               end
               alg_xml.OutputSet do
-                alg_xml.OutputParameterRef( :parameterRef => "#{item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}")
+                alg_xml.OutputParameterRef( :parameterRef => "#{item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)}")
               end
               alg_xml.TriggerSet( :name => "triggerSet") do
                 alg_xml.OnParameterUpdateTrigger( :parameterRef => "TODO")
@@ -224,7 +225,7 @@ module OpenC3
           xml['xtce'].ContainerSet do
             telemetry[target_name].each do |packet_name, packet|
               # Replaces invalid characters if any exist
-              attrs = { :name => packet_name.tr(INVALID_CHARS, REPLACEMENT_CHAR) }
+              attrs = { :name => packet_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR) }
               attrs['shortDescription'] = packet.description if packet.description
               xml['xtce'].SequenceContainer(attrs) do
                 # Adds an alias if any invalid characters exist
@@ -239,12 +240,12 @@ module OpenC3
                   end
                 end
                 process_entry_list(xml, packet, :TELEMETRY)
-                xml['xtce'].BaseContainer(:containerRef => (packet_name.tr(INVALID_CHARS, REPLACEMENT_CHAR))) do
+                xml['xtce'].BaseContainer(:containerRef => (packet_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR))) do
                   if packet.id_items && packet.id_items.length > 0
                     xml['xtce'].RestrictionCriteria do
                       xml['xtce'].ComparisonList do
                         packet.id_items.each do |item|
-                          xml['xtce'].Comparison(:parameterRef => item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR), :value => item.id_value)
+                          xml['xtce'].Comparison(:parameterRef => item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR), :value => item.id_value)
                         end
                       end
                     end
@@ -279,14 +280,14 @@ module OpenC3
           commands[target_name].each do |packet_name, packet|
             packet.items.each do |arg_name, arg|
               next if arg.data_type == :DERIVED
-              next if unique_id_items.key?(arg_name.tr(INVALID_CHARS, REPLACEMENT_CHAR))
-              to_xtce_type(arg, 'Argument', xml, prefix: packet_name.tr(INVALID_CHARS, REPLACEMENT_CHAR) + "_")
+              next if unique_id_items.key?(arg_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR))
+              to_xtce_type(arg, 'Argument', xml, prefix: packet_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR) + "_")
             end
           end
         end
         xml['xtce'].MetaCommandSet do
           commands[target_name].each do |packet_name, packet|
-            attrs = { :name => packet_name.tr(INVALID_CHARS, REPLACEMENT_CHAR) }
+            attrs = { :name => packet_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR) }
             attrs['shortDescription'] = packet.description if packet.description
             xml['xtce'].MetaCommand(attrs) do
               if packet_name.count(INVALID_CHARS) > 0
@@ -298,19 +299,19 @@ module OpenC3
               if argument_list_sorted_items.size > 0
                 xml['xtce'].ArgumentList do
                   argument_list_sorted_items.each do |item|
-                    to_xtce_item(item, 'Argument', xml, prefix: packet_name.tr(INVALID_CHARS, REPLACEMENT_CHAR) + "_")
+                    to_xtce_item(item, 'Argument', xml, prefix: packet_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR) + "_")
                   end
                 end # ArgumentList
               end # If Arguments List is greater than 0
-              xml['xtce'].CommandContainer(:name => "#{packet_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}_Commands") do
+              xml['xtce'].CommandContainer(:name => "#{packet_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)}_Commands") do
                 process_entry_list(xml, packet, :COMMAND, unique_tlm_params)
                 if packet.id_items && packet.id_items.length > 0
-                    xml['xtce'].BaseContainer(:containerRef => "#{packet_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}_Commands") do
+                    xml['xtce'].BaseContainer(:containerRef => "#{packet_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)}_Commands") do
                       xml['xtce'].RestrictionCriteria do
                         xml['xtce'].ComparisonList do
                           packet.id_items.each do |item|
                             item_prefix = "CMD_"
-                            xml['xtce'].Comparison(:parameterRef => item_prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR),:value => item.id_value)
+                            xml['xtce'].Comparison(:parameterRef => item_prefix + item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR),:value => item.id_value)
                         end
                       end # Restriction Criteria
                     end # Base Container
@@ -360,8 +361,8 @@ module OpenC3
       unique = {}
       items.each do |packet_name, packet|
         packet.sorted_items.each do |item|
-          unique[item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] ||= []
-          unique[item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] << item
+          unique[item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)] ||= []
+          unique[item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)] << item
         end
       end
       unique.each do |item_name, unique_items|
@@ -389,8 +390,8 @@ module OpenC3
         packet.sorted_items.each do |item|
           next if item.data_type == :DERIVED
           next if item.id_value
-          unique[item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] ||= []
-          unique[item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] << item
+          unique[item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)] ||= []
+          unique[item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)] << item
         end
       end
       unique.each do |item_name, unique_items|
@@ -421,18 +422,18 @@ module OpenC3
       items.each do |packet_name, packet|
         packet.id_items.each do |item|
           next if item.data_type == :DERIVED
-          unique[item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] ||= []
-          unique[item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] << item
+          unique[item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)] ||= []
+          unique[item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)] << item
         end
       end
       unique.each do |item_name, unique_items|
         if unique_items.length <= 1
-          unique[item_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] = unique_items[0]
+          unique[item_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)] = unique_items[0]
           next
         elsif COSMOS_NATIVE_DERIVED_ITEMS.include?(item_name)
-          unique[item_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] = unique_items[1]
+          unique[item_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)] = unique_items[1]
         else
-          unique[item_name.tr(INVALID_CHARS, REPLACEMENT_CHAR)] = unique_items[0]
+          unique[item_name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)] = unique_items[0]
         end
       end
       unique
@@ -457,7 +458,7 @@ module OpenC3
           if item.array_size
             # Requiring parameterRef for argument arrays appears to be a defect in the schema
             reference_symbol = temp_type == "Argument" ? :parameterRef : "#{temp_type.downcase}Ref".to_sym
-            xml['xtce'].public_send("Array#{temp_type}RefEntry".intern, reference_symbol => prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)) do
+            xml['xtce'].public_send("Array#{temp_type}RefEntry".intern, reference_symbol => prefix + item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)) do
               set_fixed_value(xml, item) if !packed
               xml['xtce'].DimensionList do
                 xml['xtce'].Dimension do
@@ -472,9 +473,9 @@ module OpenC3
             end
           else
             if packed
-              xml['xtce'].public_send("#{temp_type}RefEntry".intern, "#{temp_type.downcase}Ref".intern => prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR))
+              xml['xtce'].public_send("#{temp_type}RefEntry".intern, "#{temp_type.downcase}Ref".intern => prefix + item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR))
             else
-              xml['xtce'].public_send("#{temp_type}RefEntry".intern, "#{temp_type.downcase}Ref".intern => prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)) do
+              xml['xtce'].public_send("#{temp_type}RefEntry".intern, "#{temp_type.downcase}Ref".intern => prefix + item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)) do
                 set_fixed_value(xml, item)
               end
             end
@@ -515,9 +516,9 @@ module OpenC3
       if item.array_size
         # The above will have created the type for the array entries.   Now we create the type for the actual array.
 
-        attrs = { :name => (prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR) + '_ArrayType') }
+        attrs = { :name => (prefix + item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR) + '_ArrayType') }
         attrs[:shortDescription] = item.description if item.description
-        attrs[:arrayTypeRef] = (prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR) + '_Type')
+        attrs[:arrayTypeRef] = (prefix + item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR) + '_Type')
         xml['xtce'].public_send('Array' + param_or_arg + 'Type', attrs) do
           xml['xtce'].DimensionList do
             xml['xtce'].Dimension do
@@ -553,7 +554,7 @@ module OpenC3
     end
 
     def to_xtce_int(item, param_or_arg, xml, prefix: "")
-      attrs = { :name => (prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR) + '_Type') }
+      attrs = { :name => (prefix + item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR) + '_Type') }
       attrs[:initialValue] = item.default if item.default and !item.array_size
       attrs[:shortDescription] = item.description if item.description
       if attrs[:initialValue] == "1970-01-01T00:00:00Z"
@@ -634,7 +635,7 @@ module OpenC3
     end
 
     def to_xtce_float(item, param_or_arg, xml, prefix: "")
-      attrs = { :name => (prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR) + '_Type'), :sizeInBits => item.bit_size }
+      attrs = { :name => (prefix + item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR) + '_Type'), :sizeInBits => item.bit_size }
       attrs[:initialValue] = item.default if item.default and !item.array_size
       attrs[:shortDescription] = item.description if item.description
       xml['xtce'].public_send('Float' + param_or_arg + 'Type', attrs) do
@@ -670,7 +671,7 @@ module OpenC3
     end
 
     def to_xtce_string(item, param_or_arg, xml, string_or_binary, prefix: "")
-      attrs = { :name => (prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR) + '_Type') }
+      attrs = { :name => (prefix + item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR) + '_Type') }
       attrs[:characterWidth] = 8 if string_or_binary == 'String'
       if item.default && !item.array_size
         unless item.default.is_printable?
@@ -713,20 +714,20 @@ module OpenC3
     def to_xtce_derived(item, param_or_arg, xml, prefix: "")
       if item.name == @packet_time_string
         xml << "\n<!--TODO: \n" \
-               "\t<xtce:AbsoluteTime#{param_or_arg}Type name=\"#{item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}_Type\">\n" \
+               "\t<xtce:AbsoluteTime#{param_or_arg}Type name=\"#{item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)}_Type\">\n" \
                "\t\t<TODO/>\n" \
                "\t</xtce:AbsoluteTime#{param_or_arg}Type>"
                "-->\n"
       else
         description_string = item.description ? "shortDescription=\"#{item.description}\"" : ""
         xml << "\n<!--TODO: \n" \
-               "\t<xtce:TODO#{param_or_arg}Type name=\"#{item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}_Type\" #{description_string} />\n" \
+               "\t<xtce:TODO#{param_or_arg}Type name=\"#{item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)}_Type\" #{description_string} />\n" \
                "-->\n"
       end
     end
 
     def to_xtce_item(item, param_or_arg, xml, prefix: "", has_packet_time: false)
-      replaced_item_name = prefix + item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)
+      replaced_item_name = prefix + item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)
       if item.array_size
         type_suffix = "_ArrayType"
       else
@@ -739,7 +740,7 @@ module OpenC3
         # will use the packet name as a prefix but not in the actual argument name.
         # Maintains the individual type between arguments with a shared name.
         needs_alias = item.name.count(INVALID_CHARS) > 0
-        attrs[:name] = item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)
+        attrs[:name] = item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)
         initial_value = case item.data_type
         when :INT, :UINT, :FLOAT
           get_numerical_item_initial_value(item)
@@ -755,12 +756,12 @@ module OpenC3
           return
         end
         parameter_comment = "\n<!-- TODO: \n" \
-                 "\t<xtce:#{param_or_arg} name=\"#{item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}\" #{param_or_arg.downcase}TypeRef=\"#{item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}_Type\">\n" \
+                 "\t<xtce:#{param_or_arg} name=\"#{item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)}\" #{param_or_arg.downcase}TypeRef=\"#{item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)}_Type\">\n" \
                  "\t\t<xtce:ParameterProperties dataSource=\"derived\"/>\n"
 
         if needs_alias
           parameter_comment += "\t\t<xtce:AliasSet>\n" \
-                 "\t\t\t<xtce:Alias nameSpace=\"COSMOS\" alias=\"#{item.name.tr(INVALID_CHARS, REPLACEMENT_CHAR)}\"/>\n" \
+                 "\t\t\t<xtce:Alias nameSpace=\"COSMOS\" alias=\"#{item.name.gsub(MATCH_INVALID_REGEX, REPLACEMENT_CHAR)}\"/>\n" \
                  "\t\t</xtce:AliasSet>\n"
         end
         parameter_comment += "\t</xtce:#{param_or_arg}>\n-->\n"
